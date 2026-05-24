@@ -1267,7 +1267,7 @@ async function renderDiary() {
   if (currentSort.diary === 'rating') {
     entries.sort((a,b) => (b.personalRating||0) - (a.personalRating||0));
   } else {
-    entries.sort((a,b) => new Date(b.loggedAt || b.viewDate || 0) - new Date(a.loggedAt || a.viewDate || 0));
+    entries.sort((a,b) => new Date(b.viewDate || b.loggedAt || 0) - new Date(a.viewDate || a.loggedAt || 0));
   }
 
   if (filter === 'movie') entries = entries.filter(e => e.type === 'movie');
@@ -1849,7 +1849,7 @@ window.importPlexHistory = async function(event) {
 
     // Add new entries
     diary = [...newEntries, ...diary];
-    diary.sort((a, b) => new Date(b.loggedAt) - new Date(a.loggedAt));
+    diary.sort((a, b) => new Date(b.viewDate || b.loggedAt || 0) - new Date(a.viewDate || a.loggedAt || 0));
 
     await storageSet('mv:diary', diary);
 
@@ -2063,7 +2063,7 @@ async function loadPlexHistoryRealtime(showError = true) {
       }
     }
 
-    const mergedDiary = Array.from(existingMap.values()).sort((a,b) => new Date(b.loggedAt || b.viewDate || 0) - new Date(a.loggedAt || a.viewDate || 0));
+    const mergedDiary = Array.from(existingMap.values()).sort((a,b) => new Date(b.viewDate || b.loggedAt || 0) - new Date(a.viewDate || a.loggedAt || 0));
     await storageSet('mv:diary', mergedDiary);
     return true;
   } catch (error) {
