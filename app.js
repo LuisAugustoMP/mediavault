@@ -1746,14 +1746,15 @@ document.addEventListener('click', e => {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // WELCOME MODAL
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-window.saveWelcome = async function() {
+async function saveWelcome() {
   SETTINGS.tmdbKey = document.getElementById('wm-tmdb').value.trim() || SETTINGS.tmdbKey;
   SETTINGS.omdbKey = document.getElementById('wm-omdb').value.trim() || SETTINGS.omdbKey;
   SETTINGS.rawgKey = document.getElementById('wm-rawg').value.trim() || SETTINGS.rawgKey;
   await storageSet('mv:settings', SETTINGS);
   document.getElementById('welcome-modal').style.display = 'none';
   showToast('Bem-vindo ao MediaVault!', 'success');
-};
+}
+window.saveWelcome = saveWelcome;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // DIARY FILTERS
@@ -2096,7 +2097,7 @@ async function init() {
   // Check if first time
   if (!savedSettings) {
     document.getElementById('welcome-modal').style.display = 'flex';
-    document.getElementById('welcome-save-button')?.addEventListener('click', saveWelcome);
+    document.getElementById('welcome-save-button')?.addEventListener('click', () => window.saveWelcome());
   }
 
   // Setup searches
