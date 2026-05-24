@@ -703,10 +703,10 @@
   }
 
   .timeline-thumb {
-    width: 48px; height: 72px;
+    width: 140px; height: 80px;
     object-fit: cover;
-    object-position: center top;
-    border-radius: 6px;
+    object-position: center center;
+    border-radius: 10px;
     background: var(--bg-elevated);
     flex-shrink: 0;
   }

@@ -5,7 +5,9 @@ let SETTINGS = {
   tmdbKey: '2e7426a1e6772950462cf2eda4f5a807',
   omdbKey: 'c49621a4',
   rawgKey: 'be6e6c9f5b734399b10f6c2bb59ae333',
-  psnUser: 'LuisAugustoBr1'
+  psnUser: 'LuisAugustoBr1',
+  supabaseUrl: 'https://jqabfmdggybqgrgqhbkk.supabase.co',
+  supabaseKey: ''
 };
 
 let currentSection = 'home';
@@ -135,7 +137,12 @@ function navigate(section) {
   if (section === 'movies') renderGrid('movies');
   if (section === 'series') renderGrid('series');
   if (section === 'games') renderGrid('games');
-  if (section === 'diary') renderDiary();
+  if (section === 'diary') {
+    renderDiary();
+    loadPlexHistoryRealtime().then(() => {
+      if (currentSection === 'diary') renderDiary();
+    });
+  }
   if (section === 'settings') loadSettingsForm();
 }
 
@@ -1927,6 +1934,95 @@ function parsePlexDate(dateStr) {
   return new Date().toISOString().split('T')[0];
 }
 
+async function tryFetchSupabaseHistory(url) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (SETTINGS.supabaseKey) {
+    headers.apikey = SETTINGS.supabaseKey;
+    headers.Authorization = `Bearer ${SETTINGS.supabaseKey}`;
+  }
+
+  const response = await fetch(url, { headers });
+  if (!response.ok) {
+    const message = await response.text().catch(() => 'Erro desconhecido');
+    throw new Error(`HTTP ${response.status} - ${message}`);
+  }
+
+  return await response.json();
+}
+
+function normalizeSupabasePlexRows(rows) {
+  if (!Array.isArray(rows)) return [];
+
+  return rows.map((row, index) => {
+    const remoteId = row.id || row.ID || row.uuid || row.media_id || `${row.title || 'unknown'}_${row.watched_at || row.watchedAt || row.date || index}`;
+    const title = row.title || row.name || row.show || '';
+    const typeRaw = (row.type || '').toString().toLowerCase();
+    const isMovie = typeRaw === 'movie' || typeRaw === 'filme';
+    const isEpisode = typeRaw === 'episode' || typeRaw === 'episódio' || typeRaw === 'show' || typeRaw === 'serie' || typeRaw === 'série';
+    const mediaType = isMovie ? 'movie' : 'series';
+    const thumbnail = row.thumbnail || row.thumb || row.image || row.poster || '';
+    const watchedAt = row.watched_at || row.watchedAt || row.date || row.created_at || row.ts || '';
+    const viewDate = parsePlexDate(watchedAt);
+
+    return {
+      id: `plex_${remoteId}`,
+      mediaId: `plex_${remoteId}`,
+      type: mediaType,
+      title: title || 'Sem título',
+      posterPath: thumbnail,
+      status: 'watched',
+      personalRating: 0,
+      personalReview: '',
+      tags: ['plex-supabase'],
+      viewDate,
+      loggedAt: watchedAt ? new Date(viewDate).toISOString() : new Date().toISOString()
+    };
+  }).filter(entry => entry.title);
+}
+
+async function loadPlexHistoryRealtime() {
+  const url = SETTINGS.supabaseUrl || 'https://jqabfmdggybqgrgqhbkk.supabase.co';
+  const directUrl = `${url.replace(/\/$/, '')}/plex_history`;
+  const restUrl = `${url.replace(/\/$/, '')}/rest/v1/plex_history?select=*`;
+  
+  try {
+    let data = null;
+
+    try {
+      data = await tryFetchSupabaseHistory(directUrl);
+    } catch (directError) {
+      data = await tryFetchSupabaseHistory(restUrl);
+    }
+
+    if (data && data.data) {
+      data = data.data;
+    }
+
+    const entries = normalizeSupabasePlexRows(data);
+    if (!entries.length) return false;
+
+    const diary = (await storageGet('mv:diary')) || [];
+    const existingMap = new Map(diary.map(item => [item.mediaId || item.id, item]));
+
+    for (const entry of entries) {
+      const existing = existingMap.get(entry.mediaId);
+      if (existing) {
+        existingMap.set(entry.mediaId, { ...existing, ...entry, posterPath: entry.posterPath || existing.posterPath });
+      } else {
+        existingMap.set(entry.mediaId, entry);
+      }
+    }
+
+    const mergedDiary = Array.from(existingMap.values()).sort((a,b) => new Date(b.loggedAt || b.viewDate || 0) - new Date(a.loggedAt || a.viewDate || 0));
+    await storageSet('mv:diary', mergedDiary);
+    return true;
+  } catch (error) {
+    console.warn('Supabase history load failed:', error);
+    showToast('Falha ao buscar histórico em tempo real do Supabase.', 'error', 4000);
+    return false;
+  }
+}
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // INIT
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1970,6 +2066,9 @@ async function init() {
       renderDiary();
     });
   }
+
+  // Load live Plex history from Supabase before rendering
+  await loadPlexHistoryRealtime();
 
   // Render home
   await renderHome();
