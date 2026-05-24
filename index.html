@@ -1464,7 +1464,7 @@ function renderDiaryFeed(items){
     const typeClass = mt==='tv'?'tv':mt==='game'?'gm':'mv';
     const stLabelMap={watched:'Assistido',watching:'Assistindo',completed:'Zerado',playing:'Jogando',abandoned:'Abandonado',wishlist:'Na Lista'};
     const stLabel = stLabelMap[status]||status||'';
-    const starsHtml = rating ? buildStarsDisplay(rating,10) : '';
+    const starsHtml = rating ? buildStarsDisplay(rating) : '';
 
     const card=document.createElement('div');card.className='dcard';
     card.innerHTML=`
@@ -1517,9 +1517,19 @@ document.querySelectorAll('[data-filter]').forEach(el=>{
 });
 document.getElementById('sort-diary').addEventListener('change', applyDiaryFilter);
 
-function buildStarsDisplay(rating, max){
-  const pct = rating/max*10;
-  return Array.from({length:10},(_,i)=>`<i class="fa-solid fa-star star${i<Math.round(pct)?' f':''}"></i>`).join('');
+function buildStarsDisplay(rating) {
+  // rating: 0–5 (ex: 4.5). Mostra no máximo 5 estrelas, com suporte a meia estrela.
+  let html = '';
+  for (let i = 1; i <= 5; i++) {
+    if (rating >= i) {
+      html += `<i class="fa-solid fa-star star f"></i>`;
+    } else if (rating >= i - 0.5) {
+      html += `<i class="fa-solid fa-star-half-stroke star f"></i>`;
+    } else {
+      html += `<i class="fa-solid fa-star star"></i>`;
+    }
+  }
+  return html;
 }
 
 /* ════════════════════════════════════════════════
