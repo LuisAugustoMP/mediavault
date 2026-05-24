@@ -1299,6 +1299,7 @@ async function renderDiary() {
     const color = typeColors[entry.type] || 'var(--accent)';
     const bg = typeBg[entry.type] || 'rgba(229,160,13,0.12)';
     const label = typeLabels[entry.type] || entry.type;
+    const titleText = entry.type === 'series' && entry.episodeInfo ? `${entry.title} · ${entry.episodeInfo}` : entry.title;
     const stars = entry.personalRating ? '★'.repeat(Math.floor(entry.personalRating)) : '';
     const preview = entry.personalReview
       ? (entry.personalReview.length > 120 ? entry.personalReview.substring(0,120) + '...' : entry.personalReview)
@@ -1316,7 +1317,7 @@ async function renderDiary() {
           <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;flex-wrap:nowrap">
             <div style="display:flex;align-items:center;gap:8px;min-width:0">
               <span class="type-chip" style="background:${bg};color:${color};border:1px solid ${color}33">${label}</span>
-              <span style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${entry.title}</span>
+              <span style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${titleText}</span>
             </div>
             <div style="display:flex;flex-direction:column;align-items:flex-end;min-width:110px">
               <div style="font-size:13px;font-weight:600">${stars || '—'}</div>
@@ -1495,6 +1496,7 @@ async function loadSettingsForm() {
   document.getElementById('set-omdb').value = SETTINGS.omdbKey || '';
   document.getElementById('set-rawg').value = SETTINGS.rawgKey || '';
   document.getElementById('set-psn').value = SETTINGS.psnUser || '';
+  document.getElementById('set-supabase-key').value = SETTINGS.supabaseKey || '';
 }
 
 window.saveSettings = async function() {
@@ -1502,6 +1504,7 @@ window.saveSettings = async function() {
   SETTINGS.omdbKey = document.getElementById('set-omdb').value.trim() || SETTINGS.omdbKey;
   SETTINGS.rawgKey = document.getElementById('set-rawg').value.trim() || SETTINGS.rawgKey;
   SETTINGS.psnUser = document.getElementById('set-psn').value.trim() || SETTINGS.psnUser;
+  SETTINGS.supabaseKey = document.getElementById('set-supabase-key').value.trim() || SETTINGS.supabaseKey;
   await storageSet('mv:settings', SETTINGS);
   showToast('Configurações salvas', 'success');
 };
@@ -1925,6 +1928,14 @@ function parsePlexDate(dateStr) {
     return `${year}-${month}-${day}`;
   }
 
+  // Handle timestamp in seconds
+  if (/^\d{9,}$/.test(dateStr)) {
+    const ts = parseInt(dateStr, 10);
+    if (!Number.isNaN(ts)) {
+      return new Date(ts * 1000).toISOString().split('T')[0];
+    }
+  }
+
   // Handle ISO format (YYYY-MM-DD)
   if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
     return dateStr.split('T')[0];
@@ -1950,6 +1961,21 @@ async function tryFetchSupabaseHistory(url) {
   return await response.json();
 }
 
+function getEpisodeInfoFromPath(path) {
+  const raw = (path || '').toString();
+  const match = raw.match(/season\/(\d+)\/episode\/(\d+)/i) || raw.match(/episode\/(\d+)\/season\/(\d+)/i);
+  if (match) {
+    const season = match[1];
+    const episode = match[2];
+    return `Temp. ${season} · Ep. ${episode}`;
+  }
+  const altMatch = raw.match(/season-(\d+).*episode-(\d+)/i);
+  if (altMatch) {
+    return `Temp. ${altMatch[1]} · Ep. ${altMatch[2]}`;
+  }
+  return '';
+}
+
 function normalizeSupabasePlexRows(rows) {
   if (!Array.isArray(rows)) return [];
 
@@ -1963,6 +1989,7 @@ function normalizeSupabasePlexRows(rows) {
     const thumbnail = row.thumbnail || row.thumb || row.image || row.poster || '';
     const watchedAt = row.watched_at || row.watchedAt || row.date || row.created_at || row.ts || '';
     const viewDate = parsePlexDate(watchedAt);
+    const episodeInfo = isEpisode ? getEpisodeInfoFromPath(row.id || row.plex_url || row.plexUrl || '') : '';
 
     return {
       id: `plex_${remoteId}`,
@@ -1975,12 +2002,13 @@ function normalizeSupabasePlexRows(rows) {
       personalReview: '',
       tags: ['plex-supabase'],
       viewDate,
-      loggedAt: watchedAt ? new Date(viewDate).toISOString() : new Date().toISOString()
+      loggedAt: watchedAt ? new Date(viewDate).toISOString() : new Date().toISOString(),
+      episodeInfo
     };
   }).filter(entry => entry.title);
 }
 
-async function loadPlexHistoryRealtime() {
+async function loadPlexHistoryRealtime(showError = true) {
   const url = SETTINGS.supabaseUrl || 'https://jqabfmdggybqgrgqhbkk.supabase.co';
   const directUrl = `${url.replace(/\/$/, '')}/plex_history`;
   const restUrl = `${url.replace(/\/$/, '')}/rest/v1/plex_history?select=*`;
@@ -2018,8 +2046,19 @@ async function loadPlexHistoryRealtime() {
     return true;
   } catch (error) {
     console.warn('Supabase history load failed:', error);
-    showToast('Falha ao buscar histórico em tempo real do Supabase.', 'error', 4000);
+    if (showError) showToast('Falha ao buscar histórico em tempo real do Supabase.', 'error', 4000);
     return false;
+  }
+}
+
+window.syncSupabaseHistory = async function() {
+  showToast('Sincronizando histórico do Plex no Supabase...', 'info', 4000);
+  const success = await loadPlexHistoryRealtime(true);
+  if (success) {
+    if (currentSection === 'diary') renderDiary();
+    showToast('Histórico do Plex sincronizado com sucesso.', 'success', 4000);
+  } else {
+    showToast('Não foi possível sincronizar o histórico do Plex.', 'error', 4000);
   }
 }
 
@@ -2068,7 +2107,7 @@ async function init() {
   }
 
   // Load live Plex history from Supabase before rendering
-  await loadPlexHistoryRealtime();
+  await loadPlexHistoryRealtime(false);
 
   // Render home
   await renderHome();
