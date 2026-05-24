@@ -5,7 +5,6 @@ let SETTINGS = {
   tmdbKey: '2e7426a1e6772950462cf2eda4f5a807',
   omdbKey: 'c49621a4',
   rawgKey: 'be6e6c9f5b734399b10f6c2bb59ae333',
-  psnUser: 'LuisAugustoBr1',
   supabaseUrl: 'https://jqabfmdggybqgrgqhbkk.supabase.co',
   supabaseKey: ''
 };
@@ -1300,11 +1299,11 @@ async function renderDiary() {
     const bg = typeBg[entry.type] || 'rgba(229,160,13,0.12)';
     const label = typeLabels[entry.type] || entry.type;
     const titleText = entry.type === 'series' && entry.episodeInfo ? `${entry.title} · ${entry.episodeInfo}` : entry.title;
-    const stars = entry.personalRating ? '★'.repeat(Math.floor(entry.personalRating)) : '';
     const preview = entry.personalReview
       ? (entry.personalReview.length > 120 ? entry.personalReview.substring(0,120) + '...' : entry.personalReview)
       : '';
     const dateStr = entry.viewDate ? new Date(entry.viewDate).toLocaleDateString('pt-BR', {day:'numeric',month:'short',year:'numeric'}) : '';
+    const ratingLabel = entry.personalRating ? `${entry.personalRating}` : '';
 
     return `
       <div class="timeline-entry">
@@ -1314,21 +1313,39 @@ async function renderDiary() {
         </div>
         ${entry.posterPath ? `<img class="timeline-thumb" src="${entry.posterPath}" alt="" onerror="this.style.opacity='0'">` : `<div class="timeline-thumb" style="background:var(--bg-elevated)"></div>`}
         <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;flex-wrap:nowrap">
-            <div style="display:flex;align-items:center;gap:8px;min-width:0">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 0">
               <span class="type-chip" style="background:${bg};color:${color};border:1px solid ${color}33">${label}</span>
-              <span style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${titleText}</span>
+              <span style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${titleText}</span>
             </div>
-            <div style="display:flex;flex-direction:column;align-items:flex-end;min-width:110px">
-              <div style="font-size:13px;font-weight:600">${stars || '—'}</div>
-              ${dateStr ? `<div style="font-size:12px;color:var(--text-secondary)">${dateStr}</div>` : ''}
+            <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+              <button class="diary-rate-btn" onclick="rateDiaryEntry('${entry.id}')" title="Avaliar este item">
+                <i class="fa-solid fa-star"></i>${ratingLabel ? `<span>${ratingLabel}</span>` : ''}
+              </button>
+              ${dateStr ? `<div style="font-size:13px;color:var(--text-secondary)">${dateStr}</div>` : ''}
             </div>
           </div>
-          ${preview ? `<p style="font-family:'Open Sans',serif;font-style:italic;font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:8px">"${preview}"</p>` : ''}
+          ${preview ? `<p style="font-family:'Open Sans',serif;font-style:italic;font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:10px">"${preview}"</p>` : ''}
           ${(entry.tags||[]).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap">${entry.tags.map(t=>`<span class="tag-chip" style="font-size:11px;padding:1px 8px">#${t}</span>`).join('')}</div>` : ''}
         </div>
       </div>`;
   }).join('');
+}
+
+window.rateDiaryEntry = async function(entryId) {
+  const diary = (await storageGet('mv:diary')) || [];
+  const index = diary.findIndex(entry => entry.id === entryId);
+  if (index === -1) return;
+
+  const currentRating = diary[index].personalRating || '';
+  const input = prompt('Informe sua avaliação de 1 a 5 estrelas (deixe em branco para remover):', currentRating);
+  if (input === null) return;
+
+  const rating = input.trim() === '' ? 0 : Math.min(5, Math.max(1, parseInt(input, 10) || 0));
+  diary[index].personalRating = rating;
+  await storageSet('mv:diary', diary);
+  if (currentSection === 'diary') renderDiary();
+  showToast(rating > 0 ? `Avaliação atualizada: ${rating} estrela${rating > 1 ? 's' : ''}` : 'Avaliação removida', 'success', 3000);
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1495,7 +1512,6 @@ async function loadSettingsForm() {
   document.getElementById('set-tmdb').value = SETTINGS.tmdbKey || '';
   document.getElementById('set-omdb').value = SETTINGS.omdbKey || '';
   document.getElementById('set-rawg').value = SETTINGS.rawgKey || '';
-  document.getElementById('set-psn').value = SETTINGS.psnUser || '';
   document.getElementById('set-supabase-key').value = SETTINGS.supabaseKey || '';
 }
 
@@ -1503,7 +1519,6 @@ window.saveSettings = async function() {
   SETTINGS.tmdbKey = document.getElementById('set-tmdb').value.trim() || SETTINGS.tmdbKey;
   SETTINGS.omdbKey = document.getElementById('set-omdb').value.trim() || SETTINGS.omdbKey;
   SETTINGS.rawgKey = document.getElementById('set-rawg').value.trim() || SETTINGS.rawgKey;
-  SETTINGS.psnUser = document.getElementById('set-psn').value.trim() || SETTINGS.psnUser;
   SETTINGS.supabaseKey = document.getElementById('set-supabase-key').value.trim() || SETTINGS.supabaseKey;
   await storageSet('mv:settings', SETTINGS);
   showToast('Configurações salvas', 'success');
@@ -1713,7 +1728,7 @@ function renderSearchCard(item) {
   const label = item.source === 'Biblioteca' ? 'Ver' : 'Adicionar';
   return `
     <div class="media-card" data-id="${item.id}" data-type="${item.type}" data-source="${item.source}">
-      ${item.posterPath ? `<img src="${item.posterPath}" alt="${item.title}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` : `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:var(--bg-elevated)"><i class="uil uil-image-v"></i></div>`}
+      ${item.posterPath ? `<img src="${item.posterPath}" alt="${item.title}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` : `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:var(--bg-elevated)"><i class="fa-solid fa-image"></i></div>`}
       <div class="card-overlay" style="opacity:1;background:linear-gradient(180deg,transparent 30%,rgba(0,0,0,0.9) 100%);justify-content:flex-end;padding:14px;">
         <div class="card-overlay-title">${item.title}</div>
         <div class="card-overlay-meta"><span>${item.year || ''}</span><span style="color:var(--accent);">${item.source}</span></div>
@@ -1735,14 +1750,9 @@ window.saveWelcome = async function() {
   SETTINGS.tmdbKey = document.getElementById('wm-tmdb').value.trim() || SETTINGS.tmdbKey;
   SETTINGS.omdbKey = document.getElementById('wm-omdb').value.trim() || SETTINGS.omdbKey;
   SETTINGS.rawgKey = document.getElementById('wm-rawg').value.trim() || SETTINGS.rawgKey;
-  SETTINGS.psnUser = document.getElementById('wm-psn').value.trim() || SETTINGS.psnUser;
   await storageSet('mv:settings', SETTINGS);
   document.getElementById('welcome-modal').style.display = 'none';
   showToast('Bem-vindo ao MediaVault!', 'success');
-  // Auto-sync PSN on welcome
-  if (SETTINGS.psnUser) {
-    setTimeout(() => syncPSN(), 1000);
-  }
 };
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1793,10 +1803,11 @@ window.importPlexHistory = async function(event) {
       if (!lines[i].trim()) continue;
       
       const values = parseCSVLine(lines[i]);
-      const title = values[titleIdx]?.trim() || '';
+          const title = values[titleIdx]?.trim() || '';
       const type = values[typeIdx]?.toLowerCase() || 'episode';
       const watchedAt = values[watchedAtIdx]?.trim() || '';
       const thumbnail = values[thumbnailIdx]?.trim() || '';
+      const plexUrl = values[headers.indexOf('plex_url')]?.trim() || values[headers.indexOf('plexUrl')]?.trim() || '';
 
       if (!title) continue;
 
@@ -1804,13 +1815,12 @@ window.importPlexHistory = async function(event) {
       const viewDate = parsePlexDate(watchedAt);
 
       // Determine media type
-      let mediaType = 'series';
-      if (type === 'movie') mediaType = 'movie';
-      else if (type === 'episode') mediaType = 'series';
+      let mediaType = type === 'movie' ? 'movie' : 'series';
+      const episodeInfo = mediaType === 'series' ? getEpisodeInfoFromPath(plexUrl || thumbnail || title) : '';
 
       entries.push({
         id: `plex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        mediaId: `plex_${title.toLowerCase().replace(/\s+/g, '_')}`,
+        mediaId: `plex_${title.toLowerCase().replace(/\s+/g, '_')}_${viewDate}`,
         type: mediaType,
         title: title,
         posterPath: thumbnail,
@@ -1819,7 +1829,8 @@ window.importPlexHistory = async function(event) {
         personalReview: '',
         tags: ['plex-import'],
         viewDate: viewDate,
-        loggedAt: new Date().toISOString()
+        loggedAt: new Date().toISOString(),
+        episodeInfo
       });
     }
 
@@ -1963,16 +1974,26 @@ async function tryFetchSupabaseHistory(url) {
 
 function getEpisodeInfoFromPath(path) {
   const raw = (path || '').toString();
-  const match = raw.match(/season\/(\d+)\/episode\/(\d+)/i) || raw.match(/episode\/(\d+)\/season\/(\d+)/i);
-  if (match) {
-    const season = match[1];
-    const episode = match[2];
-    return `Temp. ${season} · Ep. ${episode}`;
+  const patterns = [
+    /season\/(\d+)\/episode\/(\d+)/i,
+    /episode\/(\d+)\/season\/(\d+)/i,
+    /season-(\d+).*episode-(\d+)/i,
+    /S(\d{1,2})E(\d{1,2})/i,
+    /seasonNumber=(\d+).*episodeNumber=(\d+)/i,
+    /season=(\d+).*episode=(\d+)/i,
+    /season[=_-]?(\d+).*episode[=_-]?(\d+)/i,
+    /ep=(\d+).*season=(\d+)/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = raw.match(pattern);
+    if (match) {
+      const season = match[1];
+      const episode = match[2];
+      return `Temp. ${season} · Ep. ${episode}`;
+    }
   }
-  const altMatch = raw.match(/season-(\d+).*episode-(\d+)/i);
-  if (altMatch) {
-    return `Temp. ${altMatch[1]} · Ep. ${altMatch[2]}`;
-  }
+
   return '';
 }
 
@@ -2075,15 +2096,6 @@ async function init() {
   // Check if first time
   if (!savedSettings) {
     document.getElementById('welcome-modal').style.display = 'flex';
-  } else {
-    const psnCached = await storageGet('mv:psn');
-    if (psnCached) {
-      renderTrophyBar(psnCached);
-      document.getElementById('psn-status').innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="color:#4fe896"><circle cx="12" cy="12" r="10"/></svg> PSN`;
-    }
-    if (SETTINGS.psnUser) {
-      setTimeout(() => syncPSN(), 1000);
-    }
   }
 
   // Setup searches
