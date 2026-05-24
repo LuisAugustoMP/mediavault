@@ -1748,6 +1748,186 @@ document.getElementById('diary-filters')?.querySelectorAll('.filter-chip').forEa
 });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// PLEX CSV IMPORT
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+window.importPlexHistory = async function(event) {
+  const file = event.target?.files?.[0];
+  if (!file) return;
+  
+  showToast('Importando histórico do Plex...', 'info', 3000);
+  
+  try {
+    const text = await file.text();
+    const lines = text.trim().split('\n');
+    
+    if (lines.length < 2) {
+      showToast('Arquivo CSV inválido', 'error');
+      return;
+    }
+
+    // Parse CSV header
+    const headers = parseCSVLine(lines[0]);
+    const titleIdx = headers.indexOf('title');
+    const typeIdx = headers.indexOf('type');
+    const watchedAtIdx = headers.indexOf('watched_at');
+    const thumbnailIdx = headers.indexOf('thumbnail');
+
+    if (titleIdx === -1 || typeIdx === -1) {
+      showToast('Arquivo CSV não possui colunas esperadas', 'error');
+      return;
+    }
+
+    // Parse entries
+    const entries = [];
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      
+      const values = parseCSVLine(lines[i]);
+      const title = values[titleIdx]?.trim() || '';
+      const type = values[typeIdx]?.toLowerCase() || 'episode';
+      const watchedAt = values[watchedAtIdx]?.trim() || '';
+      const thumbnail = values[thumbnailIdx]?.trim() || '';
+
+      if (!title) continue;
+
+      // Parse date
+      const viewDate = parsePlexDate(watchedAt);
+
+      // Determine media type
+      let mediaType = 'series';
+      if (type === 'movie') mediaType = 'movie';
+      else if (type === 'episode') mediaType = 'series';
+
+      entries.push({
+        id: `plex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        mediaId: `plex_${title.toLowerCase().replace(/\s+/g, '_')}`,
+        type: mediaType,
+        title: title,
+        posterPath: thumbnail,
+        status: 'watched',
+        personalRating: 0,
+        personalReview: '',
+        tags: ['plex-import'],
+        viewDate: viewDate,
+        loggedAt: new Date().toISOString()
+      });
+    }
+
+    if (entries.length === 0) {
+      showToast('Nenhuma entrada válida encontrada no arquivo', 'error');
+      return;
+    }
+
+    // Save to diary
+    let diary = (await storageGet('mv:diary')) || [];
+    
+    // Remove duplicates based on title and viewDate
+    const existingKeys = new Set(diary.map(d => `${d.title}_${d.viewDate}`));
+    const newEntries = entries.filter(e => !existingKeys.has(`${e.title}_${e.viewDate}`));
+
+    // Add new entries
+    diary = [...newEntries, ...diary];
+    diary.sort((a, b) => new Date(b.loggedAt) - new Date(a.loggedAt));
+
+    await storageSet('mv:diary', diary);
+
+    showToast(`✓ ${newEntries.length} entradas importadas do Plex`, 'success', 4000);
+    
+    // Refresh diary view if on that section
+    if (currentSection === 'diary') {
+      renderDiary();
+    }
+
+    event.target.value = '';
+  } catch (error) {
+    console.error('Erro ao importar Plex:', error);
+    showToast('Erro ao importar arquivo: ' + error.message, 'error', 5000);
+    event.target.value = '';
+  }
+};
+
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    const nextChar = line[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+
+  result.push(current);
+  return result;
+}
+
+function parsePlexDate(dateStr) {
+  if (!dateStr) return new Date().toISOString().split('T')[0];
+
+  // Handle "há X dias" format
+  const relativeMatch = dateStr.match(/há\s+(\d+)\s+(dia|dias|mes|mês|hora|horas|semana|semanas)/i);
+  if (relativeMatch) {
+    const num = parseInt(relativeMatch[1]);
+    const unit = relativeMatch[2].toLowerCase();
+    const date = new Date();
+
+    if (unit.includes('dia')) date.setDate(date.getDate() - num);
+    else if (unit.includes('hora')) date.setHours(date.getHours() - num);
+    else if (unit.includes('semana')) date.setDate(date.getDate() - num * 7);
+    else if (unit.includes('mês') || unit.includes('mes')) date.setMonth(date.getMonth() - num);
+
+    return date.toISOString().split('T')[0];
+  }
+
+  // Handle "DD de MMM. de YYYY" format (e.g., "23 de abr. de 2026")
+  const ptMatch = dateStr.match(/(\d{1,2})\s+de\s+(\w+)\.\s+de\s+(\d{4})/i);
+  if (ptMatch) {
+    const months = {
+      'jan': 0, 'jan.': 0,
+      'fev': 1, 'fev.': 1,
+      'mar': 2, 'mar.': 2,
+      'abr': 3, 'abr.': 3,
+      'mai': 4, 'mai.': 4,
+      'jun': 5, 'jun.': 5,
+      'jul': 6, 'jul.': 6,
+      'ago': 7, 'ago.': 7,
+      'set': 8, 'set.': 8,
+      'out': 9, 'out.': 9,
+      'nov': 10, 'nov.': 10,
+      'dez': 11, 'dez.': 11
+    };
+    
+    const day = ptMatch[1].padStart(2, '0');
+    const monthStr = ptMatch[2].toLowerCase();
+    const month = (months[monthStr] || 0).toString().padStart(2, '0');
+    const year = ptMatch[3];
+
+    return `${year}-${month}-${day}`;
+  }
+
+  // Handle ISO format (YYYY-MM-DD)
+  if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+    return dateStr.split('T')[0];
+  }
+
+  // Default to today
+  return new Date().toISOString().split('T')[0];
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // INIT
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 async function init() {

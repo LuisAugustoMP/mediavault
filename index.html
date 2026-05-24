@@ -356,6 +356,19 @@
           <p style="font-size:12px;color:var(--text-secondary);margin-top:6px">Seu perfil PSN deve ser público para sincronizar dados.</p>
         </div>
       </div>
+      <div class="config-group">
+        <div class="config-title">
+          <i class="uil uil-film"></i>
+          Importar Histórico
+        </div>
+        <div>
+          <label class="label-sm">Arquivo CSV do Plex</label>
+          <p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">Importe seu histórico de visualização do Plex para alimentar o diário.</p>
+          <button class="btn-ghost" onclick="document.getElementById('plex-csv-upload').click()" style="width:100%;justify-content:center">
+            <i class="uil uil-cloud-upload"></i>Selecionar arquivo CSV
+          </button>
+        </div>
+      </div>
       <div style="display:flex;flex-wrap:wrap;gap:12px">
         <button class="btn-primary" onclick="saveSettings()">Salvar configurações</button>
         <button class="btn-ghost" onclick="exportBackup()"><i class="uil uil-cloud-download"></i>Exportar Backup</button>
@@ -364,6 +377,7 @@
         <button class="btn-ghost" onclick="clearAllData()" style="color:var(--accent-red);border-color:rgba(232,79,79,0.3)">Limpar todos os dados</button>
       </div>
       <input type="file" id="backup-upload" style="display:none" accept=".json" onchange="importBackup(event)">
+      <input type="file" id="plex-csv-upload" style="display:none" accept=".csv" onchange="importPlexHistory(event)">
     </div>
   </div>
 </div>
