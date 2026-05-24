@@ -2096,6 +2096,7 @@ async function init() {
   // Check if first time
   if (!savedSettings) {
     document.getElementById('welcome-modal').style.display = 'flex';
+    document.getElementById('welcome-save-button')?.addEventListener('click', saveWelcome);
   }
 
   // Setup searches
