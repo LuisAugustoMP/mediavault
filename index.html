@@ -2,7 +2,10 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#07090f">
 <title>MediaLog</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -46,7 +49,7 @@
   --th:         64px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{background:var(--bg);color:var(--t1);font-family:'DM Sans',sans-serif;overflow-x:hidden;min-height:100vh}
 body::before{content:'';position:fixed;inset:0;background:
   radial-gradient(ellipse 70% 50% at 15% 25%,rgba(61,142,240,.08) 0%,transparent 55%),
@@ -384,21 +387,82 @@ textarea.fi{resize:vertical;min-height:75px;line-height:1.6}
 @media(max-width:1280px){.ggrid{grid-template-columns:repeat(4,1fr)}}
 @media(max-width:1100px){.ggrid{grid-template-columns:repeat(3,1fr)}.d-layout{grid-template-columns:1fr}.d-stat{display:none}.set-grid{grid-template-columns:1fr}}
 @media(max-width:768px){
-  .sidebar{display:none}.bnav{display:block}.main{margin-left:0!important;padding-bottom:76px}
-  .pc{padding:20px 16px}
+  /* iOS App-like experience */
+  :root{
+    --sw:0;--sc:0;
+  }
+  body{
+    padding-top:env(safe-area-inset-top);
+    padding-bottom:env(safe-area-inset-bottom);
+    padding-left:env(safe-area-inset-left);
+    padding-right:env(safe-area-inset-right);
+  }
+  .sidebar{display:none}
+  .bnav{display:block}
+  .main{margin-left:0!important;padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+  .pc{padding:20px 16px;padding-top:calc(20px + env(safe-area-inset-top))}
   .hero{width:calc(100% + 32px);margin:-20px -16px 28px;height:46vh;min-height:300px}
   .hero-cnt{padding:0 22px 32px}.hero-ttl{font-size:clamp(1.9rem,7vw,2.8rem)}
   .dcard{flex-direction:column}.dthumb{width:100%;min-width:unset;aspect-ratio:16/9}.dbody{padding:14px}
   .dttl{font-size:1.3rem}
   .psn-hd{flex-direction:column;text-align:center}.psn-stats{justify-content:center}
-  .topbar{padding:0 18px}.tb-search{display:none}
+  .topbar{
+    padding:0 18px;
+    padding-top:calc(0px + env(safe-area-inset-top));
+    height:calc(var(--th) + env(safe-area-inset-top));
+  }
+  .tb-search{display:none}
   .pc-card{flex:0 0 128px}.gc{flex:0 0 220px}
   .ggrid{grid-template-columns:repeat(2,1fr)}
-  .fab{bottom:90px;right:18px}
-  .toast-wrap{bottom:90px;right:14px;left:14px}
+  .fab{
+    bottom:calc(90px + env(safe-area-inset-bottom));
+    right:18px;
+  }
+  .toast-wrap{
+    bottom:calc(90px + env(safe-area-inset-bottom));
+    right:14px;left:14px;
+  }
   .hero-dots{right:18px}
   .set-grid{grid-template-columns:1fr}
   .psn-stats{flex-wrap:wrap}
+
+  /* Native app feel */
+  .bnav{
+    padding:8px 0 calc(8px + env(safe-area-inset-bottom));
+    background:rgba(8,11,18,.96);
+    -webkit-backdrop-filter:blur(28px) saturate(190%);
+    backdrop-filter:blur(28px) saturate(190%);
+  }
+  .bni{
+    min-height:44px;
+    min-width:44px;
+    padding:8px 12px;
+  }
+  .bni i{font-size:22px}
+  .bni span{font-size:10px;letter-spacing:.04em}
+
+  /* iOS-style modal */
+  .modal{
+    border-radius:18px;
+    max-height:calc(100vh - 80px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+  .mov.open .modal{
+    transform:translateY(0);
+  }
+
+  /* Better touch targets */
+  .nav-i,.sync-b,.btn-p,.btn-g,.stopt,.fpill,.gtab{
+    min-height:44px;
+  }
+  .pc-card,.gc,.lib-card,.dcard{
+    -webkit-tap-highlight-color:rgba(61,142,240,.15);
+  }
+
+  /* Prevent elastic scroll issues on iOS */
+  .ct,.wstrip,.gtabs{
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-x:contain;
+  }
 }
 @media(max-width:480px){.fpills{flex-wrap:wrap}.ggrid{grid-template-columns:repeat(2,1fr)}.psn-stats{gap:8px}}
 </style>
